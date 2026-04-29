@@ -35,9 +35,8 @@ app.use('/calls', callRoutes)
 
 app.listen(PORT, () => {
   console.log(`🚀 LEDO API running on port ${PORT}`)
-  // Start BullMQ worker for post-call processing
-  startCallWorker()
-  console.log('✅ Call processing worker started')
+  const worker = startCallWorker()
+  if (worker) console.log('✅ Call processing worker started')
 })
 
 export default app

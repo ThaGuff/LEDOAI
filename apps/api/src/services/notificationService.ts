@@ -1,12 +1,20 @@
 import sgMail from '@sendgrid/mail'
 import twilio from 'twilio'
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || '')
+// Lazy clients — only initialized when real keys are present
+function getSgClient() {
+  const key = process.env.SENDGRID_API_KEY
+  if (!key || !key.startsWith('SG.')) return null
+  sgMail.setApiKey(key)
+  return sgMail
+}
 
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-)
+function getTwilioClient() {
+  const sid = process.env.TWILIO_ACCOUNT_SID
+  const token = process.env.TWILIO_AUTH_TOKEN
+  if (!sid || !sid.startsWith('AC') || !token) return null
+  return twilio(sid, token)
+}
 
 export interface NotificationPayload {
   type: 'call_received' | 'voicemail' | 'appointment_booked' | 'call_summary'
@@ -49,12 +57,16 @@ export async function sendNotification(payload: NotificationPayload) {
   const template = templates[type]
   if (!template) return
 
+  const sg = getSgClient()
+  const twilioClient = getTwilioClient()
+
   // Send emails
   const emailPromises = recipientEmails
     .filter(Boolean)
     .map(async (email) => {
+      if (!sg) { console.warn('SendGrid not configured, skipping email'); return }
       try {
-        await sgMail.send({
+        await sg.send({
           to: email,
           from: process.env.SENDGRID_FROM_EMAIL || 'hello@ledo.ai',
           subject: template.subject,
@@ -78,6 +90,7 @@ export async function sendNotification(payload: NotificationPayload) {
   const smsPromises = recipientPhones
     .filter(Boolean)
     .map(async (phone) => {
+      if (!twilioClient) { console.warn('Twilio not configured, skipping SMS'); return }
       try {
         await twilioClient.messages.create({
           body: `${template.subject}\n\n${template.text.slice(0, 140)}`,

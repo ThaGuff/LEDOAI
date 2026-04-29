@@ -5,12 +5,34 @@ import { sendNotification } from '../services/notificationService'
 import { upsertHubSpotContact, createHubSpotNote } from '../services/hubspotService'
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
-const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null })
 
-// Queue for post-call processing
-export const callProcessingQueue = new Queue('call-processing', { connection })
+function createRedisConnection() {
+  try {
+    const conn = new IORedis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+    })
+    conn.on('error', (err) => console.warn('Redis connection error (non-fatal):', err.message))
+    return conn
+  } catch (err) {
+    console.warn('Could not create Redis connection:', err)
+    return null
+  }
+}
+
+const connection = createRedisConnection()
+
+// Queue for post-call processing — null if Redis unavailable
+export const callProcessingQueue = connection
+  ? new Queue('call-processing', { connection })
+  : null
 
 export function startCallWorker() {
+  if (!connection) {
+    console.warn('Redis not available — call processing worker disabled')
+    return null
+  }
   const worker = new Worker(
     'call-processing',
     async (job) => {
@@ -65,4 +87,13 @@ export function startCallWorker() {
   })
 
   return worker
+}
+
+/** Safely enqueue a post-call job — no-ops if Redis is unavailable */
+export async function enqueueCallProcessing(data: Record<string, unknown>) {
+  if (!callProcessingQueue) {
+    console.warn('Call processing queue unavailable — skipping job enqueue')
+    return
+  }
+  await callProcessingQueue.add('process-call', data)
 }
