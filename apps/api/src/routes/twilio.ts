@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import twilio from 'twilio'
-import { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse'
+const { VoiceResponse } = twilio.twiml
 import { handleInboundCall } from '../services/callHandler'
 
 export const twilioRoutes = Router()
@@ -74,7 +74,7 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
         method: 'POST',
         language: 'en-US',
       })
-      gather.say({ voice: 'Polly.Joanna-Neural' }, response.message)
+      gather.say({ voice: 'Polly.Joanna-Neural' }, response.message || '')
     } else if (response.action === 'transfer') {
       twiml.say({ voice: 'Polly.Joanna-Neural' }, 'Let me transfer you now. One moment please.')
       twiml.dial(response.transferNumber || '')
@@ -93,7 +93,7 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
         action: `/twilio/book-appointment?callSid=${callSid}`,
         method: 'POST',
       })
-      gather.say({ voice: 'Polly.Joanna-Neural' }, response.message)
+      gather.say({ voice: 'Polly.Joanna-Neural' }, response.message || '')
     } else {
       twiml.say({ voice: 'Polly.Joanna-Neural' }, response.message || 'Thank you for calling. Have a great day!')
       twiml.hangup()
