@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id              String    @id @default(cuid())
+  name            String
+  slug            String    @unique
+  twilioPhoneNumber String? @unique
+  transferNumber  String?
+  planId          String    @default("starter")
+  businessHours   Json      @default("{}")
+  aiPersonality   String    @default("professional")
+  greeting        String    @default("Thank you for calling. How can I help you today?")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users           User[]
+  callLogs        CallLog[]
+  faqs            FAQ[]
+  appointments    Appointment[]
+  notificationSettings NotificationSettings?
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  image           String?
+  role            String    @default("member")
+  organizationId  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  accounts        Account[]
+  sessions        Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model CallLog {
+  id             String    @id @default(cuid())
+  callSid        String    @unique
+  from           String
+  to             String
+  status         String    @default("queued")
+  direction      String    @default("inbound")
+  duration       Int       @default(0)
+  recordingUrl   String?
+  recordingSid   String?
+  transcript     String?   @db.Text
+  summary        String?   @db.Text
+  intent         String?
+  transferred    Boolean   @default(false)
+  voicemailLeft  Boolean   @default(false)
+  appointmentBooked Boolean @default(false)
+  organizationId String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  appointment    Appointment?
+}
+
+model FAQ {
+  id             String    @id @default(cuid())
+  question       String
+  answer         String    @db.Text
+  active         Boolean   @default(true)
+  organizationId String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Appointment {
+  id             String    @id @default(cuid())
+  callerName     String
+  callerPhone    String
+  callerEmail    String?
+  scheduledAt    DateTime?
+  notes          String?   @db.Text
+  status         String    @default("pending")
+  organizationId String
+  callLogId      String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  callLog        CallLog?  @relation(fields: [callLogId], references: [id])
+}
+
+model NotificationSettings {
+  id              String    @id @default(cuid())
+  emailEnabled    Boolean   @default(true)
+  smsEnabled      Boolean   @default(false)
+  notifyOnCall    Boolean   @default(true)
+  notifyOnVoicemail Boolean @default(true)
+  notifyOnAppointment Boolean @default(true)
+  recipientEmails Json      @default("[]")
+  recipientPhones Json      @default("[]")
+  organizationId  String    @unique
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+}

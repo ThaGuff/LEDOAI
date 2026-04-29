@@ -1,0 +1,57 @@
+import { NextAuthOptions } from 'next-auth'
+import GoogleProvider from 'next-auth/providers/google'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+import { prisma } from './prisma'
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma) as any,
+  session: { strategy: 'jwt' },
+  pages: {
+    signIn: '/auth/signin',
+    newUser: '/onboarding',
+  },
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email) return null
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+        })
+        if (!user) return null
+        return { id: user.id, email: user.email!, name: user.name, image: user.image }
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { organization: true },
+        })
+        token.organizationId = dbUser?.organizationId
+        token.role = dbUser?.role
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id as string
+        session.user.organizationId = token.organizationId as string
+        session.user.role = token.role as string
+      }
+      return session
+    },
+  },
+}
