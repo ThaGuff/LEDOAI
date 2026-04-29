@@ -29,10 +29,10 @@
 
 @layer base {
   * {
-    @apply border-border;
+    box-sizing: border-box;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-white text-gray-900 font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
