@@ -3,6 +3,7 @@ import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from './prisma'
+import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
@@ -23,11 +24,13 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null
+        if (!credentials?.email || !credentials?.password) return null
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         })
-        if (!user) return null
+        if (!user || !user.password) return null
+        const valid = await bcrypt.compare(credentials.password, user.password)
+        if (!valid) return null
         return { id: user.id, email: user.email!, name: user.name, image: user.image }
       },
     }),

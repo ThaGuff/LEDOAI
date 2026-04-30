@@ -1,7 +1,34 @@
+'use client'
+
 import Link from 'next/link'
 import { Phone } from 'lucide-react'
+import { signIn } from 'next-auth/react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, Suspense } from 'react'
 
-export default function SignInPage() {
+function SignInForm() {
+  const router = useRouter()
+  const params = useSearchParams()
+  const registered = params.get('registered')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const form = e.currentTarget
+    const email = (form.elements.namedItem('email') as HTMLInputElement).value
+    const password = (form.elements.namedItem('password') as HTMLInputElement).value
+    const result = await signIn('credentials', { email, password, redirect: false })
+    setLoading(false)
+    if (result?.error) {
+      setError('Invalid email or password')
+    } else {
+      router.push('/dashboard')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-ledo-950 via-ledo-900 to-ledo-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -16,7 +43,18 @@ export default function SignInPage() {
         </div>
 
         <div className="bg-white rounded-2xl p-8 shadow-2xl">
-          <form className="space-y-4" method="POST" action="/api/auth/callback/credentials">
+          {registered && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              Account created! Sign in below.
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
               <input
@@ -39,9 +77,10 @@ export default function SignInPage() {
             </div>
             <button
               type="submit"
-              className="w-full py-3 bg-ledo-600 text-white font-semibold rounded-lg hover:bg-ledo-700 transition-colors"
+              disabled={loading}
+              className="w-full py-3 bg-ledo-600 text-white font-semibold rounded-lg hover:bg-ledo-700 transition-colors disabled:opacity-50"
             >
-              Sign In
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
 
@@ -54,8 +93,8 @@ export default function SignInPage() {
             </div>
           </div>
 
-          <Link
-            href="/api/auth/signin/google"
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -65,7 +104,7 @@ export default function SignInPage() {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
             Sign in with Google
-          </Link>
+          </button>
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Don&apos;t have an account?{' '}
@@ -74,5 +113,13 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense>
+      <SignInForm />
+    </Suspense>
   )
 }
