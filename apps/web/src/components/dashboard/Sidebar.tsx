@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Phone, Calendar, BarChart3,
-  Settings, Mic, HelpCircle
+  Settings, Mic, HelpCircle, BookOpen, Shield
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,13 +11,14 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
   { href: '/dashboard/calls', icon: Phone, label: 'Call Logs' },
   { href: '/dashboard/appointments', icon: Calendar, label: 'Appointments' },
+  { href: '/dashboard/knowledge', icon: BookOpen, label: 'Knowledge Base' },
   { href: '/dashboard/faqs', icon: HelpCircle, label: 'FAQ Library' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/dashboard/recordings', icon: Mic, label: 'Recordings' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 
-export function Sidebar() {
+export function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const pathname = usePathname()
 
   return (
@@ -51,6 +52,15 @@ export function Sidebar() {
             </Link>
           )
         })}
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          >
+            <Shield className="text-gray-400" style={{ width: '1.125rem', height: '1.125rem' }} />
+            Admin Console
+          </Link>
+        )}
       </nav>
 
       <div className="p-4 border-t border-gray-100">

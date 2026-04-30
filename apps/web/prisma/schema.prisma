@@ -24,6 +24,7 @@ model Organization {
   callLogs        CallLog[]
   faqs            FAQ[]
   appointments    Appointment[]
+  knowledgeBase   KnowledgeBase[]
   notificationSettings NotificationSettings?
 }
 
@@ -34,6 +35,7 @@ model User {
   image           String?
   password        String?
   role            String    @default("member")
+  isSuperAdmin    Boolean   @default(false)
   organizationId  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -127,6 +129,20 @@ model Appointment {
 
   organization   Organization @relation(fields: [organizationId], references: [id])
   callLog        CallLog?  @relation(fields: [callLogId], references: [id])
+}
+
+model KnowledgeBase {
+  id              String    @id @default(cuid())
+  organizationId  String
+  type            String    @default("manual")
+  title           String
+  content         String    @db.Text
+  sourceUrl       String?
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model NotificationSettings {
