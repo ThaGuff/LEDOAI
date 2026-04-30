@@ -4,20 +4,7 @@ import bcrypt from 'bcryptjs'
 
 export async function POST(req: NextRequest) {
   try {
-    let firstName: string, lastName: string, email: string, businessName: string, password: string
-
-    const contentType = req.headers.get('content-type') || ''
-    if (contentType.includes('application/json')) {
-      const body = await req.json()
-      ;({ firstName, lastName, email, businessName, password } = body)
-    } else {
-      const form = await req.formData()
-      firstName = form.get('firstName') as string
-      lastName = form.get('lastName') as string
-      email = form.get('email') as string
-      businessName = form.get('businessName') as string
-      password = form.get('password') as string
-    }
+    const { firstName, lastName, email, businessName, password } = await req.json()
 
     if (!email || !businessName || !password) {
       return NextResponse.json({ error: 'email, businessName and password required' }, { status: 400 })
@@ -63,8 +50,10 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Redirect to signin after successful account creation
-    return NextResponse.redirect(new URL('/auth/signin?registered=1', req.url), 303)
+    return NextResponse.json(
+      { user: { id: user.id, email: user.email, organizationId: org.id } },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Signup error:', error)
     return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })

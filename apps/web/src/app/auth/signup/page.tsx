@@ -1,7 +1,46 @@
+'use client'
+
 import Link from 'next/link'
 import { Phone, CheckCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export default function SignUpPage() {
+  const router = useRouter()
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const form = e.currentTarget
+    const data = {
+      firstName: (form.elements.namedItem('firstName') as HTMLInputElement).value,
+      lastName: (form.elements.namedItem('lastName') as HTMLInputElement).value,
+      businessName: (form.elements.namedItem('businessName') as HTMLInputElement).value,
+      email: (form.elements.namedItem('email') as HTMLInputElement).value,
+      password: (form.elements.namedItem('password') as HTMLInputElement).value,
+    }
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error || 'Failed to create account')
+        setLoading(false)
+        return
+      }
+      router.push('/auth/signin?registered=1')
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-ledo-950 via-ledo-900 to-ledo-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -25,7 +64,13 @@ export default function SignUpPage() {
             ))}
           </div>
 
-          <form className="space-y-4" action="/api/auth/signup" method="POST">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">First name</label>
@@ -81,9 +126,10 @@ export default function SignUpPage() {
             </div>
             <button
               type="submit"
-              className="w-full py-3 bg-ledo-600 text-white font-semibold rounded-lg hover:bg-ledo-700 transition-colors"
+              disabled={loading}
+              className="w-full py-3 bg-ledo-600 text-white font-semibold rounded-lg hover:bg-ledo-700 transition-colors disabled:opacity-50"
             >
-              Create Account
+              {loading ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
 
