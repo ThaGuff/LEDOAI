@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { SettingsForm } from './SettingsForm'
+import { VoiceTester } from './VoiceTester'
+import { VOICE_GROUPS } from '@/lib/voices'
 
 type KnowledgeSource = {
   type: 'url' | 'sheet' | 'manual'
@@ -32,16 +34,6 @@ const TONES = [
   { value: 'empathetic', label: 'Empathetic', desc: 'Caring and understanding' },
   { value: 'enthusiastic', label: 'Enthusiastic', desc: 'Upbeat and energetic' },
   { value: 'concise', label: 'Concise', desc: 'Direct and to the point' },
-]
-
-const VOICES = [
-  { value: 'Polly.Joanna-Neural', label: 'Joanna (US Female, Neural)' },
-  { value: 'Polly.Matthew-Neural', label: 'Matthew (US Male, Neural)' },
-  { value: 'Polly.Salli-Neural', label: 'Salli (US Female, Neural)' },
-  { value: 'Polly.Joey-Neural', label: 'Joey (US Male, Neural)' },
-  { value: 'Polly.Amy-Neural', label: 'Amy (UK Female, Neural)' },
-  { value: 'Polly.Brian-Neural', label: 'Brian (UK Male, Neural)' },
-  { value: 'Polly.Olivia-Neural', label: 'Olivia (AU Female, Neural)' },
 ]
 
 const LANGUAGES = [
@@ -98,10 +90,20 @@ export function AiPersonalityForm({ initial }: { initial: AiPersonalityInitial }
               onChange={(e) => setState({ ...state, aiVoice: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ledo-500 bg-white"
             >
-              {VOICES.map((v) => (
-                <option key={v.value} value={v.value}>{v.label}</option>
+              {VOICE_GROUPS.map((group) => (
+                <optgroup key={group.provider} label={group.label}>
+                  {group.voices.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label} — {v.description}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              OpenAI &amp; ElevenLabs sound the most human. Free StreamElements works without keys.
+              Polly plays only on real Twilio calls.
+            </p>
           </div>
         </div>
         <div>
@@ -127,6 +129,11 @@ export function AiPersonalityForm({ initial }: { initial: AiPersonalityInitial }
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ledo-500"
           />
         </div>
+
+        <VoiceTester
+          voice={state.aiVoice}
+          text={state.greeting || `Hi! This is ${state.aiAgentName || 'LEDO'}. How can I help you today?`}
+        />
       </section>
 
       {/* TONE & STYLE */}

@@ -6,10 +6,37 @@ import { prisma } from '../lib/prisma'
 import { sendNotification } from '../services/notificationService'
 import { generateCallSummary, detectCallIntent } from '../services/callSummaryService'
 import { upsertHubSpotContact, createHubSpotNote } from '../services/hubspotService'
+import { parseVoice, buildPlayUrl, getCachedAudio } from '../lib/tts'
 
 export const twilioRoutes = Router()
 
 const PUBLIC_BASE = process.env.API_PUBLIC_URL || ''
+
+// Render either <Say voice="Polly.X"> or <Play>{audioUrl}</Play> on the given
+// twiml/gather node depending on the configured voice. Premium voices are
+// synthesized once and served from /twilio/audio/[token]. On any failure we
+// fall back to Polly so calls never break.
+async function speak(node: any, text: string, voice: string | undefined | null) {
+  if (!text) return
+  const v = voice || 'polly:Polly.Joanna-Neural'
+  const { provider, voiceId } = parseVoice(v)
+  if (provider === 'polly') {
+    node.say({ voice: voiceId as any, language: 'en-US' as any }, text)
+    return
+  }
+  if (!PUBLIC_BASE) {
+    node.say({ voice: 'Polly.Joanna-Neural' as any }, text)
+    return
+  }
+  try {
+    const url = await buildPlayUrl(text, v, PUBLIC_BASE)
+    if (url) node.play({}, url)
+    else node.say({ voice: 'Polly.Joanna-Neural' as any }, text)
+  } catch (e) {
+    console.warn('speak() TTS failed, falling back to Polly:', e)
+    node.say({ voice: 'Polly.Joanna-Neural' as any }, text)
+  }
+}
 
 function actionUrl(path: string, callSid: string, orgId?: string | null) {
   const base = PUBLIC_BASE ? `${PUBLIC_BASE.replace(/\/$/, '')}` : ''
@@ -71,7 +98,7 @@ twilioRoutes.post('/inbound', async (req: Request, res: Response) => {
       speechModel: 'phone_call',
     } as any)
 
-    gather.say({ voice: 'Polly.Joanna-Neural' as any, language: 'en-US' as any }, cfg.greeting)
+    await speak(gather, cfg.greeting, (cfg as any).aiVoice)
 
     twiml.redirect(actionUrl('/twilio/inbound', callSid, org?.id))
     res.type('text/xml').send(twiml.toString())
@@ -89,9 +116,11 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
     const speechResult = req.body.SpeechResult as string | undefined
     const callSid = req.query.callSid as string
     const orgId = (req.query.orgId as string) || null
+    const cfg = await loadOrgConfig(orgId)
+    const voice = (cfg as any).aiVoice as string | undefined
 
     if (!speechResult) {
-      twiml.say({ voice: 'Polly.Joanna-Neural' as any }, "I didn't catch that. Could you please repeat?")
+      await speak(twiml, "I didn't catch that. Could you please repeat?", voice)
       twiml.redirect(actionUrl('/twilio/inbound', callSid, orgId))
       return res.type('text/xml').send(twiml.toString())
     }
@@ -106,15 +135,15 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
         method: 'POST',
         language: 'en-US',
       } as any)
-      gather.say({ voice: 'Polly.Joanna-Neural' as any }, response.message || '')
+      await speak(gather, response.message || '', voice)
     } else if (response.action === 'transfer' && response.transferNumber) {
-      twiml.say({ voice: 'Polly.Joanna-Neural' as any }, response.message || 'Let me transfer you now. One moment please.')
+      await speak(twiml, response.message || 'Let me transfer you now. One moment please.', voice)
       try {
         await prisma.callLog.update({ where: { callSid }, data: { transferred: true } })
       } catch {}
       twiml.dial(response.transferNumber)
     } else if (response.action === 'voicemail') {
-      twiml.say({ voice: 'Polly.Joanna-Neural' as any }, response.message || 'Please leave your message after the tone.')
+      await speak(twiml, response.message || 'Please leave your message after the tone.', voice)
       twiml.record({
         action: actionUrl('/twilio/voicemail-done', callSid, orgId),
         maxLength: 120,
@@ -128,12 +157,9 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
         action: actionUrl('/twilio/process-speech', callSid, orgId),
         method: 'POST',
       } as any)
-      gather.say({ voice: 'Polly.Joanna-Neural' as any }, response.message || 'Sure, what date and time works best?')
+      await speak(gather, response.message || 'Sure, what date and time works best?', voice)
     } else {
-      twiml.say(
-        { voice: 'Polly.Joanna-Neural' as any },
-        response.message || 'Thank you for calling. Have a great day!',
-      )
+      await speak(twiml, response.message || 'Thank you for calling. Have a great day!', voice)
       twiml.hangup()
     }
 
@@ -153,6 +179,7 @@ twilioRoutes.post('/process-speech', async (req: Request, res: Response) => {
 twilioRoutes.post('/voicemail-done', async (req: Request, res: Response) => {
   const twiml = new VoiceResponse()
   const callSid = req.query.callSid as string
+  const orgId = (req.query.orgId as string) || null
   try {
     await prisma.callLog.update({
       where: { callSid },
@@ -165,12 +192,25 @@ twilioRoutes.post('/voicemail-done', async (req: Request, res: Response) => {
   } catch (e) {
     console.warn('voicemail-done update failed:', e)
   }
-  twiml.say(
-    { voice: 'Polly.Joanna-Neural' as any },
-    'Thank you for your message. We will get back to you shortly. Goodbye!',
-  )
+  try {
+    const cfg = await loadOrgConfig(orgId)
+    await speak(twiml, 'Thank you for your message. We will get back to you shortly. Goodbye!', (cfg as any).aiVoice)
+  } catch {
+    twiml.say({ voice: 'Polly.Joanna-Neural' as any }, 'Thank you for your message. Goodbye!')
+  }
   twiml.hangup()
   res.type('text/xml').send(twiml.toString())
+})
+
+// Audio serving for premium voices. Twilio fetches synthesized MP3s here
+// during real calls via <Play>{base}/twilio/audio/[token]</Play>.
+twilioRoutes.get('/audio/:token', (req: Request, res: Response) => {
+  const tok = req.params.token
+  const entry = getCachedAudio(tok)
+  if (!entry) return res.status(404).send('Audio expired')
+  res.setHeader('Content-Type', entry.contentType)
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+  res.send(entry.audio)
 })
 
 // Status callback from Twilio.

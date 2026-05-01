@@ -21,6 +21,7 @@ type OrgConfig = {
   transferNumber: string | null
   greeting: string
   aiAgentName: string
+  aiVoice: string
   aiTone: string
   aiResponseLength: string
   aiCreativity: number
@@ -45,6 +46,7 @@ function getDefaultOrgConfig(): OrgConfig {
     transferNumber: process.env.DEFAULT_TRANSFER_NUMBER || null,
     greeting: 'Thank you for calling. How can I help you today?',
     aiAgentName: 'LEDO',
+    aiVoice: 'polly:Polly.Joanna-Neural',
     aiTone: 'professional',
     aiResponseLength: 'medium',
     aiCreativity: 0.7,
@@ -93,6 +95,7 @@ export async function loadOrgConfig(orgId?: string | null): Promise<OrgConfig> {
       transferNumber: org.transferNumber,
       greeting: org.greeting,
       aiAgentName: org.aiAgentName || 'LEDO',
+      aiVoice: org.aiVoice || 'polly:Polly.Joanna-Neural',
       aiTone: org.aiTone || org.aiPersonality || 'professional',
       aiResponseLength: org.aiResponseLength || 'medium',
       aiCreativity: org.aiCreativity ?? 0.7,
