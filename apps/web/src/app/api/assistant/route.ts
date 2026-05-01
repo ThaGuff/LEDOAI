@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import OpenAI from 'openai'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+// Polyfill File for Node 18 so undici (used by openai SDK) doesn't crash module init.
+const g = globalThis as unknown as { File?: unknown }
+if (typeof g.File === 'undefined') {
+  g.File = class File {}
+}
 
 const SYSTEM_PROMPT = `You are LEDO Helper, a friendly product guide for the LEDO AI voice answering platform.
 
@@ -41,6 +49,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const { default: OpenAI } = await import('openai')
     const openai = new OpenAI({ apiKey })
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import * as cheerio from 'cheerio'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+// Polyfill File for Node 18 — cheerio's transitive deps (undici) reference
+// the File global which doesn't exist there, causing build-time evaluation to fail.
+const g = globalThis as unknown as { File?: unknown }
+if (typeof g.File === 'undefined') {
+  g.File = class File {}
+}
 
 const MAX_PAGES = 8
 const MAX_CONTENT = 40000
 
 export async function POST(req: NextRequest) {
+  const cheerio = await import('cheerio')
   const session = await getServerSession(authOptions)
   const orgId = session?.user?.organizationId
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
