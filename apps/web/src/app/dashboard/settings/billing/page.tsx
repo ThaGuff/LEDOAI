@@ -3,37 +3,19 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { ArrowLeft, Check } from 'lucide-react'
+import { PLANS } from '@/lib/stripe'
+import { UpgradeButton, ManageSubscriptionButton } from '@/components/billing/BillingActions'
 
-const PLANS = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: '$49',
-    interval: '/mo',
-    features: ['Up to 100 calls/mo', 'Inbound answering', 'Voicemail capture', 'Email notifications'],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$149',
-    interval: '/mo',
-    features: ['Up to 500 calls/mo', 'Appointment booking', 'Live call transfer', 'SMS + email alerts', 'CRM integration'],
-    popular: true,
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    price: '$399',
-    interval: '/mo',
-    features: ['Unlimited calls', 'Custom AI personality', 'Knowledge base scraping', 'Priority support', 'Multi-location'],
-  },
-]
+type SearchParams = { success?: string; canceled?: string }
 
-export default async function BillingPage() {
+export default async function BillingPage({ searchParams }: { searchParams?: SearchParams }) {
   const session = await getServerSession(authOptions)
   const orgId = session?.user?.organizationId
   const org = orgId ? await prisma.organization.findUnique({ where: { id: orgId } }) : null
   const currentPlan = org?.planId || 'starter'
+  const planStatus = org?.planStatus || 'trialing'
+  const hasSubscription = Boolean(org?.stripeSubscriptionId)
+  const trialEnds = org?.trialEndsAt ? new Date(org.trialEndsAt) : null
 
   const callCount = orgId
     ? await prisma.callLog.count({
@@ -44,24 +26,48 @@ export default async function BillingPage() {
       })
     : 0
 
+  const success = searchParams?.success === '1'
+  const canceled = searchParams?.canceled === '1'
+
   return (
     <div className="max-w-4xl space-y-6">
       <Link href="/dashboard/settings" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
         <ArrowLeft className="w-4 h-4" /> Back to Settings
       </Link>
 
-      <div>
-        <h1 className="text-2xl font-display font-bold text-gray-900">Billing &amp; Plan</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your subscription and view usage</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-gray-900">Billing &amp; Plan</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage your subscription and view usage</p>
+        </div>
+        <ManageSubscriptionButton hasSubscription={hasSubscription} />
       </div>
 
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-900">
+          Payment successful. Your plan will update shortly.
+        </div>
+      )}
+      {canceled && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+          Checkout canceled. You can try again anytime.
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center justify-between">
+        <div className="grid sm:grid-cols-3 gap-6">
           <div>
             <p className="text-sm text-gray-500">Current plan</p>
             <p className="text-xl font-display font-bold text-gray-900 mt-0.5 capitalize">{currentPlan}</p>
           </div>
-          <div className="text-right">
+          <div>
+            <p className="text-sm text-gray-500">Status</p>
+            <p className="text-xl font-display font-bold text-gray-900 mt-0.5 capitalize">{planStatus}</p>
+            {planStatus === 'trialing' && trialEnds && (
+              <p className="text-xs text-gray-500 mt-1">Trial ends {trialEnds.toLocaleDateString()}</p>
+            )}
+          </div>
+          <div>
             <p className="text-sm text-gray-500">Calls this month</p>
             <p className="text-xl font-display font-bold text-gray-900 mt-0.5">{callCount}</p>
           </div>
@@ -69,8 +75,8 @@ export default async function BillingPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-4">
-        {PLANS.map((plan) => {
-          const isCurrent = plan.id === currentPlan
+        {(Object.values(PLANS)).map((plan) => {
+          const isCurrent = plan.id === currentPlan && planStatus !== 'canceled'
           return (
             <div
               key={plan.id}
@@ -83,8 +89,8 @@ export default async function BillingPage() {
               )}
               <p className="text-lg font-display font-bold text-gray-900">{plan.name}</p>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-gray-900">{plan.price}</span>
-                <span className="text-sm text-gray-500">{plan.interval}</span>
+                <span className="text-3xl font-bold text-gray-900">{plan.priceLabel}</span>
+                <span className="text-sm text-gray-500">/mo</span>
               </div>
               <ul className="mt-5 space-y-2">
                 {plan.features.map((f) => (
@@ -94,26 +100,15 @@ export default async function BillingPage() {
                   </li>
                 ))}
               </ul>
-              <button
-                disabled={isCurrent}
-                className={`w-full mt-6 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                  isCurrent
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : plan.popular
-                    ? 'bg-ledo-600 text-white hover:bg-ledo-700'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                {isCurrent ? 'Current plan' : 'Upgrade'}
-              </button>
+              <UpgradeButton plan={plan.id} isCurrent={isCurrent} popular={plan.popular} />
             </div>
           )
         })}
       </div>
 
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-900">
-        Stripe checkout integration is coming soon. Contact support@ledo.ai to upgrade your plan.
-      </div>
+      <p className="text-xs text-gray-400 text-center">
+        Secure payments by Stripe. Cancel anytime from the billing portal.
+      </p>
     </div>
   )
 }
