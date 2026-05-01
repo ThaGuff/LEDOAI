@@ -32,7 +32,8 @@ export function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navItems.map((item) => {
-          const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+          const path = pathname || ''
+          const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
           return (
             <Link
               key={item.href}

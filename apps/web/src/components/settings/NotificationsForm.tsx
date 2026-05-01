@@ -13,8 +13,20 @@ type Initial = {
   recipientPhones: string[]
 }
 
+function safeArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string')
+  return []
+}
+
 export function NotificationsForm({ initial }: { initial: Initial }) {
-  const [state, setState] = useState(initial)
+  // Defense in depth: even if a caller passes a stringified array (legacy data),
+  // never let .map() crash the page.
+  const safeInitial: Initial = {
+    ...initial,
+    recipientEmails: safeArray(initial.recipientEmails),
+    recipientPhones: safeArray(initial.recipientPhones),
+  }
+  const [state, setState] = useState(safeInitial)
   const [emailInput, setEmailInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
 
